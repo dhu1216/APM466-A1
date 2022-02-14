@@ -1,0 +1,190 @@
+---
+title: "APM466 A1"
+author: "Xinzhi Hu"
+date: "05/02/2022"
+output: html_document
+---
+Empirical Questions
+
+4a)
+
+```{r}
+library(jrvFinance)
+library(data.table)
+library(SciViews)
+```
+
+
+```{r}
+bond_data=read.csv("APM466 A1 Data.csv", header=TRUE) #import data
+ISIN_bonds=c("CA135087G328","CA135087L286","CA135087L773","CA135087M359","CA135087M920","CA135087J967","CA135087K528","CA135087K940","CA135087L518","CA135087L930")
+chosen_bonds=bond_data[bond_data$ISIN %in% ISIN_bonds,]
+```
+
+Calculate Dirty Price of bonds
+
+```{r}
+CleanPriceData=chosen_bonds[c("ClosingPrice1","ClosingPrice2","ClosingPrice3", "ClosingPrice4","ClosingPrice5","ClosingPrice6","ClosingPrice7","ClosingPrice8","ClosingPrice9","ClosingPrice10")]
+days=c(10,11,12,13,14,17,18,19,20,21,24)
+AccIntMatrix=matrix(,ncol=10,nrow=10)
+for (i in 1:10){
+  for (j in 1:10){
+    AccIntMatrix[i,j]=((183-(30-days[j])-30)/365)*100*chosen_bonds$COUPON[i]
+  }
+}
+DPData=data.frame(CleanPriceData+data.frame(AccIntMatrix))
+  
+
+```
+
+
+Calculate YTM
+
+```{r}
+settlementdates=c("2022-01-10","2022-01-11","2022-01-12","2022-01-13","2022-01-14",
+                  "2022-01-17", "2022-01-18","2022-01-19","2022-01-20","2022-01-21","2022-01-24")
+YTMMatrix=matrix(,ncol=10,nrow=10)
+for (i in 1:10){
+  for (j in 1:10) {
+    YTMMatrix[i,j]=bond.yield(settle=settlementdates[j],mature=chosen_bonds$MATURITY.DATE[i],coupon=chosen_bonds$COUPON[i],freq=2,price=CleanPriceData[i,j],comp.freq=Inf,redemption_value=100)
+  }
+}
+YTMMatrixData<-data.frame(YTMMatrix)
+```
+Plot YTM
+
+```{r}
+maturitydates=c("Feb22","July22","Jan23","July23","Jan24","Aug24","Feb25","Aug25","Feb26","Aug26")
+xaxis<-as.numeric(c("0.5","1","1.5","2","2.5","3","3.5","4","4.5","5"))
+plot(type='l', xaxis, YTMMatrixData$X1*100, ylab="YTM (%)", xlab="Time", ylim=c(min(YTMMatrixData),max(YTMMatrixData))*100, xlim=c(0.5,5.2),xaxt="n", col=1,main="5-year Yield Curve")
+axis(1, at=xaxis, labels=maturitydates[1:10], las=1,cex.axis=0.8)
+lines(type='l',xaxis+rep(0.01,10), YTMMatrixData$X2*100, col=2)
+lines(type='l',xaxis+rep(0.02,10), YTMMatrixData$X3*100, col=3)
+lines(type='l',xaxis+rep(0.03,10), YTMMatrixData$X4*100, col=4)
+lines(type='l',xaxis+rep(0.04,10), YTMMatrixData$X5*100, col=5)
+lines(type='l',xaxis+rep(0.05,10), YTMMatrixData$X6*100, col=6)
+lines(type='l',xaxis+rep(0.06,10), YTMMatrixData$X7*100, col=7)
+lines(type='l',xaxis+rep(0.07,10), YTMMatrixData$X8*100, col=8)
+lines(type='l',xaxis+rep(0.08,10), YTMMatrixData$X9*100, col=9)
+lines(type='l',xaxis+rep(0.09,10), YTMMatrixData$X10*100, col=10)
+legend("bottomright",legend=settlementdates,cex=0.5,col=1:10,lty=1)
+```
+
+4b)
+
+calculate spot rates using bootstrapping method.
+
+```{r}
+TTM=matrix(, nrow=10,ncol=10)
+for (i in 1:10){
+  for (j in 1:10){
+    TTM[i,j]<-as.numeric(as.Date(chosen_bonds$MATURITY.DATE[i])-as.Date(settlementdates[j]))/365
+  }
+  append(c(),TTM)
+}
+TTMData=data.frame(TTM)
+colnames(TTMData)<-settlementdates[1:10] 
+```
+
+```{r}
+spotrates=matrix(,nrow=10,ncol=10)
+for (i in 1:10){
+  if (i==1){
+    spotrates[i,]=unlist(-log10(DPData[i,]/(100+(chosen_bonds$COUPON[i]*100)))/TTMData[i,]) ##log provides negative forward rates creating NA log values in Q5...
+  }
+  else {
+    spotrates[i,]=unlist(-log((DPData[i,]-(chosen_bonds$COUPON[i]*sum(exp(-spotrates[1:i-1,]*TTMData[1:i-1,]))))/(100+(chosen_bonds$COUPON[i]*100)))/(TTMData[i,]))}
+}
+spotratesdata<-data.frame(spotrates)
+```
+
+Plot Spot Curve
+
+```{r}
+plot(type='l',xaxis,spotratesdata$X1*100, ylab="Spot Rates (%)",xlab="Time",ylim=100*c(min(spotratesdata)-0.001,max(spotratesdata)+0.001),xlim=c(0.5,5.2),xaxt='n',col=1,main="Spot Curve")
+axis(1, at=xaxis, labels=maturitydates[1:10], las=1,cex.axis=0.8)
+lines(type='l',xaxis+rep(0.01,10), spotratesdata$X2*100, col=2)
+lines(type='l',xaxis+rep(0.02,10), spotratesdata$X3*100, col=3)
+lines(type='l',xaxis+rep(0.03,10), spotratesdata$X4*100, col=4)
+lines(type='l',xaxis+rep(0.04,10), spotratesdata$X5*100, col=5)
+lines(type='l',xaxis+rep(0.05,10), spotratesdata$X6*100, col=6)
+lines(type='l',xaxis+rep(0.06,10), spotratesdata$X7*100, col=7)
+lines(type='l',xaxis+rep(0.07,10), spotratesdata$X8*100, col=8)
+lines(type='l',xaxis+rep(0.08,10), spotratesdata$X9*100, col=9)
+lines(type='l',xaxis+rep(0.09,10), spotratesdata$X10*100, col=10)
+legend("topright",legend=settlementdates,cex=0.37,col=1:10,lty=1)
+```
+4c)
+
+Calculate forward rates
+
+
+Calculate forward rates using annual spot rates
+
+```{r}
+forwardtimes=c(1:5)
+fwdrates=matrix(,nrow=4,ncol=10)
+for (i in 1:4){
+  fwdrates[i,]=unlist(((i+1)*spotratesdata[2*i+1,]-(spotratesdata[1,]))/(forwardtimes[i+1]-forwardtimes[1]))
+}
+fwdratedata<-data.frame(fwdrates)
+```
+
+Plot forward rates
+
+```{r}
+plot(type='l',c(2:5),fwdratedata$X1*100, ylab="Forward Rate (%)",xlab="Time",ylim=100*c(min(fwdratedata),max(fwdratedata)),xlim=c(2,5.2),col=1,main="Forward rates")
+lines(type='l',c(2:5)+rep(0.01,4), fwdratedata$X2*100, col=2)
+lines(type='l',c(2:5)+rep(0.02,4), fwdratedata$X3*100, col=3)
+lines(type='l',c(2:5)+rep(0.03,4), fwdratedata$X5*100, col=5)
+lines(type='l',c(2:5)+rep(0.03,4), fwdratedata$X6*100, col=6)
+lines(type='l',c(2:5)+rep(0.03,4), fwdratedata$X7*100, col=7)
+lines(type='l',c(2:5)+rep(0.03,4), fwdratedata$X8*100, col=8)
+lines(type='l',c(2:5)+rep(0.03,4), fwdratedata$X9*100, col=9)
+lines(type='l',c(2:5)+rep(0.03,4), fwdratedata$X10*100, col=10)
+legend("bottomright",legend=settlementdates,cex=0.5,col=1:10,lty=1)
+```
+5)
+
+Cov matrix for yield
+
+```{r}
+v1=v2=v3=v4=v5=vector("numeric",9)
+m1=matrix(,ncol=5,nrow=)
+for (i in 1:9){
+  v1[i]=log(YTMMatrixData[2,i+1]/YTMMatrixData[2,i])
+  v2[i]=log(YTMMatrixData[4,i+1]/YTMMatrixData[4,i])
+  v3[i]=log(YTMMatrixData[6,i+1]/YTMMatrixData[6,i])
+  v4[i]=log(YTMMatrixData[8,i+1]/YTMMatrixData[8,i])
+  v5[i]=log(YTMMatrixData[10,i+1]/YTMMatrixData[10,i])
+
+}
+logretyield=data.frame(v1,v2,v3,v4,v5)
+covm1=cov(logretyield)
+
+```
+
+Cov matrix for forwards
+
+```{r}
+x1=x2=x3=x4=vector("numeric")
+for (i in 1:9){
+  x1[i]=log10(fwdratedata[1,i+1]/fwdratedata[1,i])
+  x2[i]=log10(fwdratedata[2,i+1]/fwdratedata[2,i])
+  x3[i]=log10(fwdratedata[3,i+1]/fwdratedata[3,i])
+  x4[i]=log10(fwdratedata[4,i+1]/fwdratedata[4,i])
+}
+
+logretfwds=data.frame(x1,x2,x3,x4)
+covm2=cov(logretfwds)
+```
+
+6)
+
+Calculate eigenvalues & eigenvectors for covariance matrices
+
+```{r}
+eigenyield=eigen(covm1)
+eigenfwds=eigen(covm2)
+```
+
